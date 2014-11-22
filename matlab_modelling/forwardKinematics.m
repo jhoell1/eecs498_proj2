@@ -21,6 +21,3 @@ g3 = expm(zeta3_h*d);
 gst_ini = [0; 0; h;1];
 
 gst = g1*g2*g3*gst_ini;
-
-
-            
