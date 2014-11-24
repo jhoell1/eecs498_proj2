@@ -1,4 +1,5 @@
 from numpy import*
+from scipy import linalg
 
 # This class does forward and inverse kinematics for 
 # the RRP arm designed by Team Maize for Project 2 in EECS 498.
@@ -49,9 +50,9 @@ class kinematics ( object ):
     # the provided point. Useful for animating links in an arm
     # config is 3 element array ==> [theta1, theta2, d]
     def get_RBT_subset(self,config,num):
-        g1 = exp(self.zeta1_h*config[0])
-        g2 = exp(self.zeta2_h*config[1])
-        g3 = exp(self.zeta2_h*config[2])
+        g1 = linalg.expm(self.zeta1_h*config[0])
+        g2 = linalg.expm(self.zeta2_h*config[1])
+        g3 = linalg.expm(self.zeta2_h*config[2])
         if num == 1:
             return g1
         elif num == 2:
