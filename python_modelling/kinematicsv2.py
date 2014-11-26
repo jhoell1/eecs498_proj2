@@ -88,5 +88,3 @@ def rrpkkk():
     ax = Axes3D(fig)
     #axis([-500,500,-500,500,-500,500])
     ax.plot(X,Y,Z,'p')
-
-def paper():
