@@ -47,20 +47,28 @@ class robotArmDriver ( JoyApp ):
         self.servo = [joint(C.at.Nx0E,[-150.0,150.0]),joint(C.at.Nx1C,[-150.0,150.0]),joint(C.at.Nx07,[-150.0,150.0])]
         self.mode = manual_angle
         self.angleCommand = [0,0,0]
+        self.curConfig = [0,0,0]
+        self.followTrajectory = False
+        self.trajectories = [[],[],[]]
+        self.trajectoryIndex = 0
+        self.trajectoryMax = 0
 
     def onStart(self):
         self.controlUpdate = self.onceEvery(1.0/20.0)
 
     # start is a 2 x 1 array: [time, pos]
     # final is a 2 x 1 array: [time, pos]
-    def linear_interp(start,final,timestep):
+    def linear_interp(self,start,final,timestep):
         slope = (final[1]-start[1])/(final[0]-start[0])
         arr_size = (final[0]-start[0])/timestep + 1
-        trajectory = 
-
-        (int)(gsl_vector_get(end,0)-gsl_vector_get(start,0))/time_step + 1; //+1 for the final time step
-
-
+        trajectory = []
+        pos = start[1]
+        trajectory.append(pos)
+        for i in range(1,arr_size):
+            pos = pos + slope*timestep
+            trajectory.append(pos)
+        print trajectory
+        return trajectory
 
     def onEvent(self,evt):
 
@@ -70,18 +78,37 @@ class robotArmDriver ( JoyApp ):
                 if evt.index <= 3:
                     #print "setting angle " + str(evt.index)
                     self.angleCommand[evt.index-1] =  angle
-            elif evt.kind == 'btnL':
-                self.mode = (self.mode + 1)%3
+            elif evt.kind == 'btnL' and evt.index==1 and evt.value == 127 :
+                self.mode = (self.mode + 1)%4
+                print self.mode
+            elif evt.kind == 'btnL' and evt.index==2 and evt.value == 127 : 
+                # start following trajectory
+                self.followTrajectory = True
+                self.trajectoryIndex = 0
+                for i in range(0,3):
+                    start = [0,self.curConfig[i]]
+                    end = [2000,self.angleCommand[i]]
+                    self.trajectories[i] = self.linear_interp(start,end,200)
+                    self.trajectoryMax = len(self.trajectories[i])
+
 
 
         if self.controlUpdate():
+            print "current config" + str(self.curConfig)
+
             for i in range(0,3):
+                self.curConfig[i] = self.servo[i].get_angle()
                 #print(self.angleCommand)
                 if self.mode == manual_angle:
                     self.servo[i].move(self.angleCommand[i],False)
-                else:
-                # do inverse kinematics..........
-                    print "blah"
+                elif self.mode == angle_set:
+                    if self.followTrajectory == True:
+                        self.servo[i].move(self.trajectories[i][self.trajectoryIndex],False)
+
+            if self.mode == angle_set:
+                self.trajectoryIndex = self.trajectoryIndex + 1
+                if self.trajectoryIndex == self.trajectoryMax:
+                    self.followTrajectory = False
 
 
 if __name__ == "__main__":
