@@ -88,3 +88,27 @@ def rrpkkk():
     ax = Axes3D(fig)
     #axis([-500,500,-500,500,-500,500])
     ax.plot(X,Y,Z,'p')
+
+def paper():
+    N = 20
+    t1 = 0
+    t2 = pi
+    d=11*25.4/2
+    a = 8*25.4/2
+    o0 = array([0,0,0,1])
+    o1 = array([a,0,d,1])
+    o2 = array([a,0,-d,1])
+    o3 = array([-a,0,-d,1])
+    o4 = array([-a,0,d,1])
+    x = linspace(-2*25.4,-2*25.4,N)
+    y = linspace(0,0,N)
+    z = linspace(-2*25.4,2*25.4,N)
+
+    R1 = array([[1, 0, 0, 0],[0, cos(t2), -sin(t2), 0],[0, sin(t2), cos(t2), 0],[0, 0, 0, 1]])
+    R2 = array([[cos(t1), -sin(t1), 0, 0],[sin(t1), cos(t1), 0, 0],[0, 0, 1, 0], [0, 0, 0, 1]])
+
+    R12 = dot(R1,R2)   
+    o1 = dot(R2*R1*o1;
+    o2 = R2*R1*o2;
+    o3 = R2*R1*o3;
+    o4 = R2*R1*o4;
