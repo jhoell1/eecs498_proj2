@@ -1,4 +1,4 @@
-from numpy import cos,sin,asfarray, dot, c_, newaxis, mean, exp, sum, sqrt, sign, pi, radians
+from numpy import *
 from numpy.linalg import svd
 from numpy.random import randn
 from scipy import pi
@@ -13,7 +13,22 @@ manual_angle = 0
 pos_set = 1
 automatic = 2
 angle_set = 3
+teach_and_repeat = 4
 
+
+def printState(state):
+    if state == manual_angle:
+        s = " Manual Angle "
+    elif state == pos_set:
+        s = " Synchronous Position Movement (sliders control x,y,z)"
+    elif state == automatic:
+        s = " autonomous control"
+    elif state == angle_set:
+        s = " Synchronous Angle Movement (sliders control th0,th1,th2)"
+    elif state == teach_and_repeat:
+        s = " Teach and Repeat "
+
+    print "State: " + str(s)
 
 class joint( object ):
 
@@ -23,6 +38,7 @@ class joint( object ):
     def __init__(self,servoID,limits,*arg, **kw):
         self.limits = limits
         self.s = servoID
+        self.s.set_speed(68)
 
     # returns 1 if the servo movement command was sent, 0 otherwise
     def move(self,angle,UnitRadians):
@@ -44,9 +60,10 @@ class robotArmDriver ( JoyApp ):
     def __init__(self,height,A,*arg, **kw):
         JoyApp.__init__(self, *arg,**kw)
         C = L.Cluster(count=3)
-        self.servo = [joint(C.at.Nx0E,[-150.0,150.0]),joint(C.at.Nx1C,[-150.0,150.0]),joint(C.at.Nx07,[-150.0,150.0])]
+        self.servo = [joint(C.at.Nx0E,[-3.0,90.0]),joint(C.at.Nx1C,[-30.0,45.0]),joint(C.at.Nx07,[-90.0,90.0])]
         self.mode = manual_angle
         self.angleCommand = [0,0,0]
+        self.positionCommand = [0,0,0]
         self.curConfig = [0,0,0]
         self.followTrajectory = False
         self.trajectories = [[],[],[]]
@@ -55,8 +72,16 @@ class robotArmDriver ( JoyApp ):
         self.h = height
         self.A = A
 
+        self.teachPoints = []
+        self.teachRepeatOn = False
+        self.teachRepeatPlayback = False
+
+        self.printState = False
+
+        self.positionLimits = [ [3.5*2.54, (12+3.5)*2.54], [-6*2.54,6*2.54], [3.5*2.54, 20*2.54]]
+
     def onStart(self):
-        self.controlUpdate = self.onceEvery(1.0/20.0)
+        self.controlUpdate = self.onceEvery(1.0/25.0)
 
     # start is a 2 x 1 array: [time, pos]
     # final is a 2 x 1 array: [time, pos]
@@ -76,13 +101,25 @@ class robotArmDriver ( JoyApp ):
 
         if evt.type == MIDIEVENT :
             if evt.kind == 'slider':
-                angle = -180 + evt.value*360.0/127.0
                 if evt.index <= 3:
+
+                    if self.mode is 1:
+                        r = self.positionLimits[i][1] - self.positionLimits[i][0] 
+                        self.positionCommand[i] = self.positionLimits[i][0] + r/127.0
+                    else:
+                        r = self.servo[evt.index-1].limits[1]- self.servo[evt.index-1].limits[0]
+                        angle = self.servo[evt.index-1].limits[0] + evt.value*r/127.0
+
+
                     #print "setting angle " + str(evt.index)
                     self.angleCommand[evt.index-1] =  angle
             elif evt.kind == 'btnL' and evt.index==1 and evt.value == 127 :
-                self.mode = (self.mode + 1)%4
+                self.mode = (self.mode + 1)%5
+                printState(self.mode)
                 print self.mode
+            elif evt.kind == 'btnL' and evt.index==3 and evt.value == 127 :
+                self.printState = not self.printState
+
             elif evt.kind == 'btnL' and evt.index==2 and evt.value == 127 : 
                 # start following trajectory
                 self.followTrajectory = True
@@ -95,12 +132,15 @@ class robotArmDriver ( JoyApp ):
 
                 for i in range(0,3):
                     start = [0,self.curConfig[i]]
-                    end = [2000,desiredAngle[i]]
-                    self.trajectories[i] = self.linear_interp(start,end,200)
+                    end = [5000,desiredAngle[i]]
+                    self.trajectories[i] = self.linear_interp(start,end,100)
                     self.trajectoryMax = len(self.trajectories[i])
 
         if self.controlUpdate():
-            print "current config" + str(self.curConfig)
+
+            if self.printState is True:
+                print "current config" + str(self.curConfig) 
+                print "current position: " + str(self.end_effector_position(self.curConfig))
 
             for i in range(0,3):
                 self.curConfig[i] = self.servo[i].get_angle()
