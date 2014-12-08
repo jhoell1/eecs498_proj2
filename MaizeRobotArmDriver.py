@@ -54,6 +54,8 @@ class joint( object ):
 
     def get_angle(self):
         return self.s.get_pos()/100.0 # unit of return of get_pos is decidegrees
+    def go_slack(self):
+        self.s.go_slack()
 
 class robotArmDriver ( JoyApp ):
 
@@ -73,6 +75,7 @@ class robotArmDriver ( JoyApp ):
         self.A = A
 
         self.teachPoints = []
+        self.numTeachPoints = 0
         self.teachRepeatOn = False
         self.teachRepeatPlayback = False
 
@@ -97,15 +100,37 @@ class robotArmDriver ( JoyApp ):
         print trajectory
         return trajectory
 
+    def collectPoint(self):
+        if self.mode == teach_and_repeat:
+            print "capturing configuration point: " + str(self.curConfig)
+            print self.teachPoints
+            self.teachPoints.append(list(self.curConfig))
+            print self.teachPoints
+            self.numTeachPoints = self.numTeachPoints + 1
+
+    def clearPoints(self):
+        self.teachPoints = []
+        self.numTeachPoints = 0
+
+
     def onEvent(self,evt):
+
+        if evt.type == KEYDOWN :
+            print describeEvt(evt)
+
+            if evt.key == K_p:
+                self.collectPoint()
+            if evt.key == K_d:
+                self.clearPoints()
+
 
         if evt.type == MIDIEVENT :
             if evt.kind == 'slider':
                 if evt.index <= 3:
 
                     if self.mode is 1:
-                        r = self.positionLimits[i][1] - self.positionLimits[i][0] 
-                        self.positionCommand[i] = self.positionLimits[i][0] + r/127.0
+                        r = self.positionLimits[evt.index-1][1] - self.positionLimits[evt.index-1][0] 
+                        self.positionCommand[evt.index-1] = self.positionLimits[evt.index-1][0] + r/127.0
                     else:
                         r = self.servo[evt.index-1].limits[1]- self.servo[evt.index-1].limits[0]
                         angle = self.servo[evt.index-1].limits[0] + evt.value*r/127.0
@@ -116,6 +141,13 @@ class robotArmDriver ( JoyApp ):
             elif evt.kind == 'btnL' and evt.index==1 and evt.value == 127 :
                 self.mode = (self.mode + 1)%5
                 printState(self.mode)
+                if self.mode == teach_and_repeat:
+                    print "setting servos to slack"
+                    for i in range(0,3):
+                        self.servo[i].go_slack()
+                    print "finished slacking servos!"
+
+
                 print self.mode
             elif evt.kind == 'btnL' and evt.index==3 and evt.value == 127 :
                 self.printState = not self.printState
@@ -136,6 +168,19 @@ class robotArmDriver ( JoyApp ):
                     self.trajectories[i] = self.linear_interp(start,end,100)
                     self.trajectoryMax = len(self.trajectories[i])
 
+
+            elif evt.kind == 'btnU' and evt.index==1 and evt.value ==127 :
+                print "Following trajectory!"
+                self.followTrajectory = True
+                self.trajectoryIndex = 0
+                for i in range(0,self.numTeachPoints-1):
+                    for j in range(0,3):
+                        start = [0, self.teachPoints[i][j]]
+                        end = [5000,self.teachPoints[i+1][j]]
+                        trajInterm = self.linear_interp(start,end,100)
+                        self.trajectories[j] = self.trajectories[j] + trajInterm
+                        self.trajectoryMax = len(self.trajectories[j])
+
         if self.controlUpdate():
 
             if self.printState is True:
@@ -147,11 +192,11 @@ class robotArmDriver ( JoyApp ):
                 #print(self.angleCommand)
                 if self.mode == manual_angle:
                     self.servo[i].move(self.angleCommand[i],False)
-                elif self.mode == angle_set or self.mode == pos_set:
+                elif self.mode == angle_set or self.mode == pos_set or self.mode == teach_and_repeat:
                     if self.followTrajectory == True:
                         self.servo[i].move(self.trajectories[i][self.trajectoryIndex],False)
 
-            if self.mode == angle_set:
+            if self.mode == angle_set or self.mode == teach_and_repeat:
                 self.trajectoryIndex = self.trajectoryIndex + 1
                 if self.trajectoryIndex == self.trajectoryMax:
                     self.followTrajectory = False
