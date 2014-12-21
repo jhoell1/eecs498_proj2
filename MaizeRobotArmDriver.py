@@ -38,7 +38,10 @@ class joint( object ):
     def __init__(self,servoID,limits,*arg, **kw):
         self.limits = limits
         self.s = servoID
-        self.s.set_speed(68)
+        self.s.mem[self.s.mcu.punch] = 15
+        self.s.mem[self.s.mcu.cw_compliance_slope] = 128
+        self.s.mem[self.s.mcu.ccw_compliance_slope] = 128
+
 
     # returns 1 if the servo movement command was sent, 0 otherwise
     def move(self,angle,UnitRadians):
@@ -62,7 +65,8 @@ class robotArmDriver ( JoyApp ):
     def __init__(self,height,A,*arg, **kw):
         JoyApp.__init__(self, *arg,**kw)
         C = L.Cluster(count=3)
-        self.servo = [joint(C.at.Nx0E,[-3.0,90.0]),joint(C.at.Nx1C,[-30.0,45.0]),joint(C.at.Nx07,[-90.0,90.0])]
+        #self.servo = [joint(C.at.Nx0E,[-3.0,90.0]),joint(C.at.Nx1C,[-30.0,45.0]),joint(C.at.Nx07,[-90.0,90.0])]
+        self.servo = [joint(C.at.Nx0E,[-90.0,90.0]),joint(C.at.Nx1C,[-90.0,90.0]),joint(C.at.Nx07,[-90.0,90.0])]
         self.mode = manual_angle
         self.angleCommand = [0,0,0]
         self.positionCommand = [0,0,0]
@@ -84,7 +88,7 @@ class robotArmDriver ( JoyApp ):
         self.positionLimits = [ [3.5*2.54, (12+3.5)*2.54], [-6*2.54,6*2.54], [3.5*2.54, 20*2.54]]
 
     def onStart(self):
-        self.controlUpdate = self.onceEvery(1.0/25.0)
+        self.controlUpdate = self.onceEvery(1.0/15.0)
 
     # start is a 2 x 1 array: [time, pos]
     # final is a 2 x 1 array: [time, pos]
@@ -112,6 +116,13 @@ class robotArmDriver ( JoyApp ):
         self.teachPoints = []
         self.numTeachPoints = 0
 
+    def withinRange(self,configuration,threshold):
+        sum = 0
+        for i in range(0,3):
+            sum = sum + pow(self.curConfig[i]-configuration[i],2)
+
+        #return sum < threshold
+        return True
 
     def onEvent(self,evt):
 
@@ -134,10 +145,8 @@ class robotArmDriver ( JoyApp ):
                     else:
                         r = self.servo[evt.index-1].limits[1]- self.servo[evt.index-1].limits[0]
                         angle = self.servo[evt.index-1].limits[0] + evt.value*r/127.0
-
-
-                    #print "setting angle " + str(evt.index)
-                    self.angleCommand[evt.index-1] =  angle
+                        self.angleCommand[evt.index-1] =  angle
+                   #print "setting angle " + str(evt.index)
             elif evt.kind == 'btnL' and evt.index==1 and evt.value == 127 :
                 self.mode = (self.mode + 1)%5
                 printState(self.mode)
@@ -173,11 +182,13 @@ class robotArmDriver ( JoyApp ):
                 print "Following trajectory!"
                 self.followTrajectory = True
                 self.trajectoryIndex = 0
+                teachPointsWStart  = list(self.teachPoints)
+                teachPointsWStart.insert(0, self.curConfig)
                 for i in range(0,self.numTeachPoints-1):
                     for j in range(0,3):
-                        start = [0, self.teachPoints[i][j]]
-                        end = [5000,self.teachPoints[i+1][j]]
-                        trajInterm = self.linear_interp(start,end,100)
+                        start = [0, teachPointsWStart[i][j]]
+                        end = [5000, teachPointsWStart[i+1][j]]
+                        trajInterm = self.linear_interp(start,end,500)
                         self.trajectories[j] = self.trajectories[j] + trajInterm
                         self.trajectoryMax = len(self.trajectories[j])
 
@@ -194,12 +205,18 @@ class robotArmDriver ( JoyApp ):
                     self.servo[i].move(self.angleCommand[i],False)
                 elif self.mode == angle_set or self.mode == pos_set or self.mode == teach_and_repeat:
                     if self.followTrajectory == True:
-                        self.servo[i].move(self.trajectories[i][self.trajectoryIndex],False)
+                        if(i==1):
+                            self.servo[i].move(self.trajectories[i][self.trajectoryIndex],False)
+                        else:
+                            self.servo[i].move(self.trajectories[i][self.trajectoryIndex],False)
 
             if self.mode == angle_set or self.mode == teach_and_repeat:
-                self.trajectoryIndex = self.trajectoryIndex + 1
-                if self.trajectoryIndex == self.trajectoryMax:
-                    self.followTrajectory = False
+                if self.followTrajectory == True:
+                    #curTrajPoint = [self.trajectories[0][self.trajectoryIndex],self.trajectories[1][self.trajectoryIndex],self.trajectories[2][self.trajectoryIndex]]
+                    #if(self.withinRange(curTrajPoint,5)):
+                    self.trajectoryIndex = self.trajectoryIndex + 1
+                    if self.trajectoryIndex == self.trajectoryMax:
+                        self.followTrajectory = False
 
      # ee_pos is a 3 element array ==> [x y z]
     # step_length should be small, on the order of 0.05 - 0.5
